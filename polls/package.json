@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "@fastify/cookie": "^9.3.1",
+    "@fastify/websocket": "^8.3.1",
     "@prisma/client": "^5.9.1",
     "tsc": "^2.0.4",
     "tsx": "^4.7.0",

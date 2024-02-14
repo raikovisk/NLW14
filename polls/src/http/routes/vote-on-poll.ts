@@ -2,8 +2,10 @@ import { z } from "zod"
 import { randomUUID } from "crypto"
 import { prisma } from "../../lib/prisma"
 import { FastifyInstance } from "fastify"
+import { redis } from "../../lib/redis"
+import { voting } from "../../utils/voting-pub-sub"
 
-
+// Define the schema for this type of request. This will be used to validate incoming requests.
 export async function voteOnPoll(app: FastifyInstance){
     app.post('/polls/:pollId/votes', async (request, reply) => {
         const voteOnPollBody = z.object({
@@ -28,13 +30,16 @@ export async function voteOnPoll(app: FastifyInstance){
                     },
                 }
             })
-
-            if (userPreviousVoteOnPoll && userPreviousVoteOnPoll?.pollOptionId != pollOptionId){
+            // If the user has already voted on this poll before, update their existing vote instead of creating a new one
+            if (userPreviousVoteOnPoll && userPreviousVoteOnPoll.pollOptionId !== pollOptionId){
                 await prisma.vote.delete({
                     where: {
                         id: userPreviousVoteOnPoll.id,
                     }
                 })
+
+                await redis.incrby(pollId, -1)
+                
             } else if (userPreviousVoteOnPoll) {
                 return reply.status(400).send({ message: 'Você já votou nesta enquete!' })
             }
@@ -60,6 +65,13 @@ export async function voteOnPoll(app: FastifyInstance){
             
         })
 
-        return 
+        await redis.zincrby(pollId, 1, pollOptionId)
+
+        voting.publish(pollId, {
+            pollOptionId,
+            votes: 1
+        })
+
+        return reply.status(201).send()
     })
 }
